@@ -1,0 +1,8 @@
+port: "8080"
+log-level: "info"
+database:  
+  host: "127.0.0.1"
+  port: "3306"
+  db: "canalisation_access"
+  username: "canalisation_app"
+  password: "can-app*01"
