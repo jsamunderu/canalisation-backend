@@ -1,0 +1,10 @@
+# 3rd part libraries
+Its advised, but not necessary, to compile and link the following third party
+libraries from source
+
+pistache
+mstch
+json11
+openssl
+mariadb connector cpp
+googletest
