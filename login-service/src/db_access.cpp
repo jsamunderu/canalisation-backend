@@ -1,3 +1,4 @@
+#include <iostream>
 #include "db_access.hpp"
 
 LoginServiceDBAccess::LoginServiceDBAccess(unsigned int port,
@@ -6,7 +7,6 @@ LoginServiceDBAccess::LoginServiceDBAccess(unsigned int port,
 	const std::string& username,
 	const std::string& password
 ) : mariadb_access(std::make_shared<MariadbAccess>(port, hostname, database, username, password)),
-
 	insert_login_stmt(std::make_shared<MariadbStatement>(mariadb_access, InsertLoginQuery.data())),
 	update_last_activity_stmt(std::make_shared<MariadbStatement>(mariadb_access, UpdateLoginActivityQuery.data())),
 	update_logout_ts_stmt(std::make_shared<MariadbStatement>(mariadb_access, UpdateLogoutQuery.data())),
@@ -18,102 +18,184 @@ LoginServiceDBAccess::LoginServiceDBAccess(unsigned int port,
 	update_last_activity(std::make_shared<ExecQuery>(update_last_activity_stmt)),
 	update_logout_ts(std::make_shared<ExecQuery>(update_logout_ts_stmt)),
 
-	fetch_auth(std::make_shared<FetchQuery>(auth_stmt, AuthQueryColumns)),
-	fetch_login(std::make_shared<FetchQuery>(login_stmt, LoginQueryColumns))
+	fetch_auth(std::make_shared<FetchQuery>(auth_stmt)),
+	fetch_login(std::make_shared<FetchQuery>(login_stmt))
 {
 }
 
-LoginServiceDBAccess::AuthResultSet::AuthResultSet(std::shared_ptr<FetchQuery> fetch_auth)
-	: fetch_auth(fetch_auth), result(fetch_auth->get())
+LoginServiceDBAccess::AuthResultSet::AuthResultSet(std::shared_ptr<FetchQuery> fetch_auth,
+		unsigned long long count)
+	: fetch_auth(fetch_auth), result(std::make_unique<MYSQL_BIND[]>(count)),
+		count(count), rs_metadata(nullptr)
 {
-	result[0].buffer_type = MYSQL_TYPE_STRING;
-	result[0].buffer = username;
+	rs_metadata = mysql_stmt_result_metadata(fetch_auth->get().get());
+	if (rs_metadata == nullptr) {
+		throw Exception(DatabaseAccessError::STATEMENT, fetch_auth->get().reportError());
+	}
+	MYSQL_FIELD *fields = mysql_fetch_fields(rs_metadata);
+	std::memset(result.get(), 0, sizeof(MYSQL_BIND) * count);
+	result[0].buffer_type = fields[0].type;
+	result[0].buffer = username_buf;
+	result[0].buffer_length = username_len;
 	result[0].is_null = &username_is_null;
-	result[0].length = &username_len;
 	result[0].error = &username_error;
+	result[0].length = &username_len;
 
-	result[1].buffer_type = MYSQL_TYPE_STRING;
-	result[1].buffer = password;
+	result[1].buffer_type = fields[0].type;
+	result[1].buffer = password_buf;
+	result[1].buffer_length = password_len;
 	result[1].is_null = &password_is_null;
-	result[1].length = &password_len;
 	result[1].error = &password_error;
+	result[1].length = &password_len;
+
+	if (mysql_stmt_bind_result(fetch_auth->get().get(), result.get())) {
+		throw Exception(DatabaseAccessError::STATEMENT, fetch_auth->get().reportError());
+	}
+}
+
+LoginServiceDBAccess::AuthResultSet::~AuthResultSet()
+{
+	if (rs_metadata) {
+		mysql_free_result(rs_metadata);
+	}
+	mysql_stmt_reset(fetch_auth->get().get());
 }
 
 std::tuple<bool, LoginServiceDBAccess::AuthResultSet::Data> LoginServiceDBAccess::AuthResultSet::next()
 {
+	Data data;
 	if (!fetch_auth->next()) {
-		return std::tuple{false, Data{}};
+		return std::tuple{false, data};
 	}
 
-	Data data;
-	data.username.assign(static_cast<const char *>(username), static_cast<std::size_t>(username_len));
-	data.password.assign(static_cast<const char *>(password), static_cast<std::size_t>(password_len));
+	data.username.assign(static_cast<const char *>(username_buf), static_cast<std::size_t>(username_len));
+	data.password.assign(static_cast<const char *>(password_buf), static_cast<std::size_t>(password_len));
 	return std::tuple{true, data};
+}
+
+LoginServiceDBAccess::LoginResultSet::LoginResultSet(std::shared_ptr<FetchQuery> fetch_login, unsigned long long count)
+	: fetch_login(fetch_login), result(std::make_unique<MYSQL_BIND[]>(count)),
+		count(count), rs_metadata(nullptr)
+{
+	rs_metadata = mysql_stmt_result_metadata(fetch_login->get().get());
+	if (rs_metadata == nullptr) {
+		throw Exception(DatabaseAccessError::STATEMENT, fetch_login->get().reportError());
+	}
+	MYSQL_FIELD *fields = mysql_fetch_fields(rs_metadata);
+	std::memset(result.get(), 0, sizeof(MYSQL_BIND) * count);
+
+	result[0].buffer_type = fields[0].type;
+	result[0].buffer = uuid_buf;
+	result[0].buffer_length = buf_len[0];
+	result[0].is_null = &is_null[0];
+	result[0].error = &error[0];
+	result[0].length = &buf_len[0];
+
+	result[1].buffer_type = fields[1].type;
+	result[1].buffer = token_buf;
+	result[1].buffer_length = buf_len[1];
+	result[1].is_null = &is_null[1];
+	result[1].error = &error[1];
+	result[1].length = &buf_len[1];
+
+	result[2].buffer_type = fields[2].type;
+	result[2].buffer = &login_ts;
+	result[2].buffer_length = sizeof(login_ts);
+	result[2].is_null = &is_null[2];
+	result[2].error = &error[2];
+	result[2].length = &buf_len[2];
+
+	result[3].buffer_type = fields[3].type;
+	result[3].buffer = &login_activity_ts;
+	result[3].buffer_length = sizeof(login_activity_ts);
+	result[3].is_null = &is_null[3];
+	result[3].error = &error[3];
+	result[3].length = &buf_len[3];
+
+	result[4].buffer_type = fields[4].type;
+	result[4].buffer = &logout_ts;
+	result[4].buffer_length = sizeof(logout_ts);
+	result[4].is_null = &is_null[4];
+	result[4].error = &error[4];
+	result[4].length = &buf_len[4];
+
+	if (mysql_stmt_bind_result(fetch_login->get().get(), result.get())) {
+		throw Exception(DatabaseAccessError::STATEMENT, fetch_login->get().reportError());
+	}
+}
+
+LoginServiceDBAccess::LoginResultSet::~LoginResultSet()
+{
+	if (rs_metadata) {
+		mysql_free_result(rs_metadata);
+	}
+	mysql_stmt_reset(fetch_login->get().get());
 }
 
 std::tuple<bool, LoginServiceDBAccess::LoginResultSet::Data> LoginServiceDBAccess::LoginResultSet::next()
 {
+	Data data;
 	if (!fetch_login->next()) {
 		return std::tuple{false, Data{}};
 	}
-
-	Data data;
+	data.uuid.assign(static_cast<const char *>(uuid_buf));
+	data.token.assign(static_cast<const char *>(token_buf));
+	data.login_ts = login_ts;
+	data.login_activity_ts = login_activity_ts;
+	data.logout_ts = logout_ts;
 	return std::tuple{true, data};
 }
 
-void LoginServiceDBAccess::insertLogin(const std::string& uuid, const std::string& token)
+unsigned long long LoginServiceDBAccess::insertLogin(const std::string& uuid, const std::string& token)
 {
 	MYSQL_BIND bind[2];
 	std::memset(bind, 0, sizeof(bind));
 
 	std::size_t uuid_length = uuid.size();
-
 	bind[0].buffer_type = MYSQL_TYPE_STRING;
 	bind[0].buffer = const_cast<char *>(uuid.c_str());
-	bind[0].buffer_length= uuid.size();
-	bind[0].is_null= 0;
-	bind[0].length= &uuid_length;
+	bind[0].buffer_length = uuid.size();
+	bind[0].is_null = 0;
+	bind[0].length = &uuid_length;
 
 	std::size_t tkn_length = token.size();
 	bind[1].buffer_type = MYSQL_TYPE_STRING;
 	bind[1].buffer = const_cast<char *>(token.c_str());
-	bind[1].buffer_length= token.size();
-	bind[1].is_null= 0;
-	bind[1].length= &tkn_length;
+	bind[1].buffer_length = token.size();
+	bind[1].is_null = 0;
+	bind[1].length = &tkn_length;
 
-	insert_login->execute(bind);
+	return insert_login->execute(bind);
 }
 
-void LoginServiceDBAccess::updateLoginActivity(const std::string& token)
+unsigned long long LoginServiceDBAccess::updateLoginActivity(const std::string& token)
 {
-	MYSQL_BIND bind[2];
+	MYSQL_BIND bind[1];
 	std::memset(bind, 0, sizeof(bind));
 
 	std::size_t tkn_length = token.size();
-
 	bind[0].buffer_type = MYSQL_TYPE_STRING;
 	bind[0].buffer = const_cast<char *>(token.c_str());
-	bind[0].buffer_length= token.size();
-	bind[0].is_null= 0;
-	bind[0].length= &tkn_length;
+	bind[0].buffer_length = token.size();
+	bind[0].is_null = 0;
+	bind[0].length = &tkn_length;
 
-	update_last_activity->execute(bind);
+	return update_last_activity->execute(bind);
 }
 
-void LoginServiceDBAccess::updateLogout(const std::string& token)
+unsigned long long LoginServiceDBAccess::updateLogout(const std::string& token)
 {
-	MYSQL_BIND bind[2];
+	MYSQL_BIND bind[1];
 	std::memset(bind, 0, sizeof(bind));
 
 	std::size_t tkn_length = token.size();
-
 	bind[0].buffer_type = MYSQL_TYPE_STRING;
 	bind[0].buffer = const_cast<char *>(token.c_str());
-	bind[0].buffer_length= token.size();
-	bind[0].is_null= 0;
-	bind[0].length= &tkn_length;
+	bind[0].buffer_length = token.size();
+	bind[0].is_null = 0;
+	bind[0].length = &tkn_length;
 
-	update_last_activity->execute(bind);
+	return update_last_activity->execute(bind);
 }
 
 LoginServiceDBAccess::AuthResultSet LoginServiceDBAccess::fetchAuth(const std::string& username)
@@ -121,17 +203,20 @@ LoginServiceDBAccess::AuthResultSet LoginServiceDBAccess::fetchAuth(const std::s
 	MYSQL_BIND bind[1];
 	std::memset(bind, 0, sizeof(bind));
 
-	std::size_t uname_length = username.size();
+	my_bool username_is_null = 0;
+	my_bool username_error = 0;
 
+	std::size_t uname_length = username.size();
 	bind[0].buffer_type = MYSQL_TYPE_STRING;
 	bind[0].buffer = const_cast<char *>(username.c_str());
-	bind[0].buffer_length= username.size();
-	bind[0].is_null= 0;
-	bind[0].length= &uname_length;
+	bind[0].buffer_length = username.size();
+	bind[0].is_null = &username_is_null;
+	bind[0].length = &uname_length;
+	bind[0].error = &username_error;
 
-	fetch_auth->fetch(bind);
+	auto fields = fetch_auth->fetch(bind);
 
-	return AuthResultSet(fetch_auth);
+	return AuthResultSet(fetch_auth, fields);
 }
 
 LoginServiceDBAccess::LoginResultSet LoginServiceDBAccess::fetchLogin(const std::string& token)
@@ -140,14 +225,13 @@ LoginServiceDBAccess::LoginResultSet LoginServiceDBAccess::fetchLogin(const std:
 	std::memset(bind, 0, sizeof(bind));
 
 	std::size_t tkn_length = token.size();
-
 	bind[0].buffer_type = MYSQL_TYPE_STRING;
 	bind[0].buffer = const_cast<char *>(token.c_str());
-	bind[0].buffer_length= token.size();
-	bind[0].is_null= 0;
-	bind[0].length= &tkn_length;
+	bind[0].buffer_length = token.size();
+	bind[0].is_null = 0;
+	bind[0].length = &tkn_length;
 
-	fetch_login->fetch(bind);
+	auto fields = fetch_login->fetch(bind);
 
-	return LoginResultSet(fetch_login);
+	return LoginResultSet(fetch_login, fields);
 }

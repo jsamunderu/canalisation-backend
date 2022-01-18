@@ -24,10 +24,24 @@ void LoginService::handleLogin(const Pistache::Rest::Request& request, Pistache:
 		response.send(Pistache::Http::Code::Bad_Request, err);
 	}
 
-	Auth auth = {json};
-	BOOST_LOG_TRIVIAL(info) << "Payload: " << auth.username << " " << auth.password;
-	response.send(Pistache::Http::Code::Ok, json.dump());
-	db.insertLogin("test", "test");
+	Auth auth{json};
+	BOOST_LOG_TRIVIAL(info) << "Payload: [" << auth.username << "] [" << auth.password << "]";
+
+	auto authResult = db.fetchAuth(auth.username);
+	auto [status, data] = authResult.next();
+	if (!status) {
+		response.send(Pistache::Http::Code::Unauthorized, "Uknown username or password!");
+		return;
+	}
+	BOOST_LOG_TRIVIAL(info) << "DB: " << data.username << " " << data.password;
+
+	if (data.password == auth.password) {
+		response.send(Pistache::Http::Code::Ok, json.dump());
+		return;
+	}
+
+	response.send(Pistache::Http::Code::Unauthorized, "Uknown username or password!");
+	
 }
 
 void LoginService::handleLoginOut(const Pistache::Rest::Request& request, Pistache::Http::ResponseWriter response)
