@@ -55,26 +55,47 @@ std::string MariadbStatement::reportError()
 	return ss.str();
 }
 
-void FetchQuery::fetch(MYSQL_BIND parameters[])
+unsigned long long FetchQuery::fetch(MYSQL_BIND parameters[])
 {
-	mysql_stmt_bind_param(stmt->get(), parameters);
+	if (mysql_stmt_bind_param(stmt->get(), parameters)) {
+		throw Exception(DatabaseAccessError::STATEMENT, stmt->reportError());
+	}
+
 	if (mysql_stmt_execute(stmt->get())) {
 		throw Exception(DatabaseAccessError::STATEMENT, stmt->reportError());
 	}
-	if (mysql_stmt_bind_result(stmt->get(), result.get())) {
-		throw Exception(DatabaseAccessError::STATEMENT, stmt->reportError());
-	}
+
+	auto fields = mysql_stmt_field_count(stmt->get());
+
+	return fields;
 }
 
 bool FetchQuery::next()
 {
-	return mysql_stmt_fetch(stmt->get()) == 0;
+	auto status = mysql_stmt_fetch(stmt->get());
+	switch (status) {
+	case MYSQL_NO_DATA:
+		return false;
+	case 1:
+		throw Exception(DatabaseAccessError::STATEMENT, stmt->reportError());
+	case MYSQL_DATA_TRUNCATED:
+		break;
+	default:
+		break;
+	}
+	return true;
 }
 
-void ExecQuery::execute(MYSQL_BIND parameters[])
+unsigned long long ExecQuery::execute(MYSQL_BIND parameters[])
 {
-	mysql_stmt_bind_param(stmt->get(), parameters);
+	if (mysql_stmt_bind_param(stmt->get(), parameters)) {
+		throw Exception(DatabaseAccessError::STATEMENT, stmt->reportError());
+	}
 	if (mysql_stmt_execute(stmt->get())) {
 		throw Exception(DatabaseAccessError::STATEMENT, stmt->reportError());
 	}
+	MYSQL_RES *prepare_meta_result = mysql_stmt_result_metadata(stmt->get());
+	auto _ = gsl::finally([prepare_meta_result] { mysql_free_result(prepare_meta_result); });
+	auto rows = mysql_affected_rows(stmt->get_con().get());
+	return rows;
 }

@@ -36,6 +36,8 @@ public:
 	MariadbStatement() : stmt(nullptr) {}
 	MariadbStatement(std::shared_ptr<MariadbAccess> con, const std::string& stmt_str);
 	MYSQL_STMT* get() { return stmt; }
+	MariadbAccess& get_con() { return *con.get(); }
+
 	~MariadbStatement();
 	std::string reportError();
 protected:
@@ -43,29 +45,23 @@ protected:
 	MYSQL_STMT *stmt;
 };
 
-class FetchQuery {
-public:
-	FetchQuery(std::shared_ptr<MariadbStatement> stmt, std::size_t no_of_fields)
-		: stmt(stmt), result(std::make_unique<MYSQL_BIND[]>(no_of_fields)),
-		no_of_fields(no_of_fields)
-		{
-			std::memset(result.get(), 0, sizeof(MYSQL_BIND) * no_of_fields);
-		}
-	std::shared_ptr<FetchQuery> fetch_login;
-	std::size_t no_of_fields;
-	MYSQL_BIND* get() { return result.get(); }
-	void fetch(MYSQL_BIND parameters[]);
-	bool next();
-private:
-	std::shared_ptr<MariadbStatement> stmt;
-	std::unique_ptr<MYSQL_BIND[]> result;
-};
-
 class ExecQuery {
 public:
 	ExecQuery(std::shared_ptr<MariadbStatement> stmt) : stmt(stmt) {}
 	~ExecQuery() {}
-	void execute(MYSQL_BIND parameters[]);
+	MariadbStatement& get() { return *stmt.get(); }
+	unsigned long long execute(MYSQL_BIND parameters[]);
+private:
+	std::shared_ptr<MariadbStatement> stmt;
+};
+
+class FetchQuery {
+public:
+	FetchQuery(std::shared_ptr<MariadbStatement> stmt) : stmt(stmt) {}
+	~FetchQuery() {}
+	MariadbStatement& get() { return *stmt.get(); }
+	unsigned long long fetch(MYSQL_BIND parameters[]);
+	bool next();
 private:
 	std::shared_ptr<MariadbStatement> stmt;
 };

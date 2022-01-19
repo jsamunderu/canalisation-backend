@@ -12,11 +12,11 @@ public:
 		const std::string& password
 	);
 
-	void insertLogin(const std::string& uui, const std::string& token);
+	unsigned long long insertLogin(const std::string& uui, const std::string& token);
 
-	void updateLoginActivity(const std::string& token);
+	unsigned long long updateLoginActivity(const std::string& token);
 
-	void updateLogout(const std::string& token);
+	unsigned long long updateLogout(const std::string& token);
 
 	struct AuthResultSet {
 		struct Data {
@@ -24,22 +24,24 @@ public:
 			std::string password;
 		};
 
+		unsigned long long rows () { return count; }
 		std::tuple<bool, Data> next();
+		~AuthResultSet();
 		friend class LoginServiceDBAccess;
 	private:
-		char username[512];
-		unsigned long username_len;
+		char username_buf[256];
+		char password_buf[256];
 		my_bool username_is_null;
-		my_bool username_error;
-		char password[128];
-		unsigned long password_len;
 		my_bool password_is_null;
+		unsigned long username_len = sizeof(username_buf);
+		unsigned long password_len = sizeof(password_buf);
+		my_bool username_error;
 		my_bool password_error;
-
-		static constexpr std::size_t BindLen = 2;
-		AuthResultSet(std::shared_ptr<FetchQuery> fetch_auth);
+		AuthResultSet(std::shared_ptr<FetchQuery> fetch_auth, unsigned long long count);
 		std::shared_ptr<FetchQuery> fetch_auth;
-		std::shared_ptr<MYSQL_BIND[]> result;
+		std::unique_ptr<MYSQL_BIND[]> result;
+		MYSQL_RES *rs_metadata;
+		unsigned long long count;
 	};
 
 	AuthResultSet fetchAuth(const std::string& username);
@@ -53,29 +55,31 @@ public:
 			std::time_t logout_ts;
 		};
 
+		unsigned long long rows () { return count; }
 		std::tuple<bool, Data> next();
+		~LoginResultSet();
 		friend class LoginServiceDBAccess;
 	private:
-		char uuid[36];
-		char token[128];
+		char uuid_buf[36];
+		char token_buf[128];
 		std::time_t login_ts;
 		std::time_t login_activity_ts;
 		std::time_t logout_ts;
-		unsigned long uuid_len;
-		unsigned long token_len;
+		unsigned long buf_len[5] = {sizeof(uuid_buf), sizeof(token_buf), 0, 0, 0};
 		my_bool is_null[5];
 		my_bool error[5];
-		LoginResultSet(std::shared_ptr<FetchQuery> fetch_login)
-			: fetch_login(fetch_login), result(fetch_login->get()) {}
+		LoginResultSet(std::shared_ptr<FetchQuery> fetch_login, unsigned long long count);
 		std::shared_ptr<FetchQuery> fetch_login;
-		MYSQL_BIND* result;
+		std::unique_ptr<MYSQL_BIND[]> result;
+		MYSQL_RES *rs_metadata;
+		unsigned long long count;
 	};
 
 	LoginResultSet fetchLogin(const std::string& token);
 	
 private:
 	static constexpr std::string_view InsertLoginQuery =
-		"INSERT INTO Login(uuid, token, login_ts, last_activity_ts) VALUES(?,?,?,?)";
+		"INSERT INTO Login(uuid, token, login_ts, last_activity_ts) VALUES(?,?,now(),now())";
 	static constexpr std::string_view UpdateLoginActivityQuery =
 		"UPDATE Login SET last_activity_ts = ? WHERE token = ?";
 	static constexpr std::string_view UpdateLogoutQuery =
@@ -86,7 +90,7 @@ private:
 		"SELECT username, password from Auth WHERE username = ?";
 	static constexpr std::size_t LoginQueryColumns = 5;
 	static constexpr std::string_view LoginQuery =
-		"SELECT uuid, token, login_ts, last_activity_ts, logout_ts from Login WHERE token = ?";
+		"SELECT uuid, token, login_ts, last_activity_ts, logout_ts from Login";
 
 	std::shared_ptr<MariadbAccess> mariadb_access;
 
