@@ -26,6 +26,18 @@ public:
 
 		unsigned long long rows () { return count; }
 		std::tuple<bool, Data> next();
+		AuthResultSet(AuthResultSet const& other) {
+			copy(other);
+		}
+		AuthResultSet& operator=(AuthResultSet const& other) {
+			if (this == &other) {
+				return *this;
+			}
+			copy(other);
+			return *this;
+		}
+		AuthResultSet(AuthResultSet&& other) noexcept = default;
+		AuthResultSet& operator=(AuthResultSet&& other) noexcept = default;
 		~AuthResultSet();
 		friend class LoginServiceDBAccess;
 	private:
@@ -38,6 +50,7 @@ public:
 		my_bool username_error;
 		my_bool password_error;
 		AuthResultSet(std::shared_ptr<FetchQuery> fetch_auth, unsigned long long count);
+		void copy(AuthResultSet const& other);
 		std::shared_ptr<FetchQuery> fetch_auth;
 		std::unique_ptr<MYSQL_BIND[]> result;
 		MYSQL_RES *rs_metadata;
@@ -57,6 +70,18 @@ public:
 
 		unsigned long long rows () { return count; }
 		std::tuple<bool, Data> next();
+		LoginResultSet(LoginResultSet const& other) {
+			copy(other);
+		}
+		LoginResultSet& operator=(LoginResultSet const& other) {
+			if (this == &other) {
+				return *this;
+			}
+			copy(other);
+			return *this;
+		}
+		LoginResultSet(LoginResultSet&& other) noexcept = default;
+		LoginResultSet& operator=(LoginResultSet&& other) noexcept = default;
 		~LoginResultSet();
 		friend class LoginServiceDBAccess;
 	private:
@@ -69,6 +94,7 @@ public:
 		my_bool is_null[5];
 		my_bool error[5];
 		LoginResultSet(std::shared_ptr<FetchQuery> fetch_login, unsigned long long count);
+		void copy(LoginResultSet const& other);
 		std::shared_ptr<FetchQuery> fetch_login;
 		std::unique_ptr<MYSQL_BIND[]> result;
 		MYSQL_RES *rs_metadata;
