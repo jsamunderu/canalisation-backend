@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package grpc.auth_service;
+
+option objc_class_prefix = "AUTHSRV";
+
+message AuthRequest {
+  string token = 1;
+}
+
+message AuthResponse {
+  bool status = 1;
+}
+
+service AuthService {
+  rpc IsAuthorised(AuthRequest) returns (AuthResponse);
+}

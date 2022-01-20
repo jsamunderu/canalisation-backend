@@ -9,14 +9,10 @@
 class LoginService {
 public:
 	explicit LoginService(Pistache::Address addr, std::size_t threads_no,
-		unsigned int port,
-		const std::string& hostname,
-		const std::string& database,
-		const std::string& username,
-		const std::string& password)
+		const MariadbAccess::Config& config)
 		: httpEndpoint(std::make_unique<Pistache::Http::Endpoint>(addr)),
 			threads_no(threads_no),
-			db(port, hostname, database, username, password)
+			db(config)
 	{
 		auto opts = Pistache::Http::Endpoint::options().threads(static_cast<int>(threads_no));
 		httpEndpoint->init(opts);

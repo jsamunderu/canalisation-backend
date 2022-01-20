@@ -1,12 +1,9 @@
+#include <algorithm>
 #include <iostream>
 #include "db_access.hpp"
 
-LoginServiceDBAccess::LoginServiceDBAccess(unsigned int port,
-	const std::string& hostname,
-	const std::string& database,
-	const std::string& username,
-	const std::string& password
-) : mariadb_access(std::make_shared<MariadbAccess>(port, hostname, database, username, password)),
+LoginServiceDBAccess::LoginServiceDBAccess(const MariadbAccess::Config& config)
+ : mariadb_access(std::make_shared<MariadbAccess>(config)),
 	insert_login_stmt(std::make_shared<MariadbStatement>(mariadb_access, InsertLoginQuery.data())),
 	update_last_activity_stmt(std::make_shared<MariadbStatement>(mariadb_access, UpdateLoginActivityQuery.data())),
 	update_logout_ts_stmt(std::make_shared<MariadbStatement>(mariadb_access, UpdateLogoutQuery.data())),
@@ -72,7 +69,7 @@ void LoginServiceDBAccess::AuthResultSet::copy(LoginServiceDBAccess::AuthResultS
 	this->username_error = other.username_error;
 	this->password_error = other.password_error;
 	this->fetch_auth = other.fetch_auth;
-	this->result.reset(other.result.get());
+	this->result = std::move(const_cast<AuthResultSet&>(other).result);
 	this->rs_metadata = other.rs_metadata;
 	this->count = other.count;
 }
@@ -159,7 +156,7 @@ void LoginServiceDBAccess::LoginResultSet::copy(LoginServiceDBAccess::LoginResul
 	this->login_activity_ts = other.login_activity_ts;
 	this->logout_ts = other.logout_ts;
 	this->fetch_login = other.fetch_login;
-	this->result.reset(other.result.get());
+	this->result = std::move(const_cast<LoginResultSet&>(other).result);
 	this->rs_metadata = other.rs_metadata;
 	this->count = other.count;
 }

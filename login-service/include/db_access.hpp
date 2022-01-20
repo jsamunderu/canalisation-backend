@@ -5,12 +5,7 @@
 #include "mariadb_access.hpp"
 class LoginServiceDBAccess {
 public:
-	LoginServiceDBAccess(unsigned int port,
-		const std::string& hostname,
-		const std::string& database,
-		const std::string& username,
-		const std::string& password
-	);
+	LoginServiceDBAccess(const MariadbAccess::Config&);
 
 	unsigned long long insertLogin(const std::string& uui, const std::string& token);
 
