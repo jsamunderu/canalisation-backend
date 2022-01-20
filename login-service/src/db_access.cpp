@@ -61,6 +61,22 @@ LoginServiceDBAccess::AuthResultSet::~AuthResultSet()
 	mysql_stmt_reset(fetch_auth->get().get());
 }
 
+void LoginServiceDBAccess::AuthResultSet::copy(LoginServiceDBAccess::AuthResultSet const& other)
+{
+	std::memcpy(this->username_buf, username_buf, sizeof(username_buf));
+	std::memcpy(this->password_buf, password_buf, sizeof(password_buf));
+	this->username_is_null = other.username_is_null;
+	this->password_is_null = other.password_is_null;
+	this->username_len = username_len;
+	this->password_len = password_len;
+	this->username_error = other.username_error;
+	this->password_error = other.password_error;
+	this->fetch_auth = other.fetch_auth;
+	this->result.reset(other.result.get());
+	this->rs_metadata = other.rs_metadata;
+	this->count = other.count;
+}
+
 std::tuple<bool, LoginServiceDBAccess::AuthResultSet::Data> LoginServiceDBAccess::AuthResultSet::next()
 {
 	Data data;
@@ -130,6 +146,22 @@ LoginServiceDBAccess::LoginResultSet::~LoginResultSet()
 		mysql_free_result(rs_metadata);
 	}
 	mysql_stmt_reset(fetch_login->get().get());
+}
+
+void LoginServiceDBAccess::LoginResultSet::copy(LoginServiceDBAccess::LoginResultSet const& other)
+{
+	std::memcpy(this->uuid_buf, uuid_buf, sizeof(uuid_buf));
+	std::memcpy(this->token_buf, token_buf, sizeof(token_buf));
+	std::memcpy(this->buf_len, buf_len, sizeof(buf_len));
+	std::memcpy(this->is_null, is_null, sizeof(is_null));
+	std::memcpy(this->error, error, sizeof(error));
+	this->login_ts = other.login_ts;
+	this->login_activity_ts = other.login_activity_ts;
+	this->logout_ts = other.logout_ts;
+	this->fetch_login = other.fetch_login;
+	this->result.reset(other.result.get());
+	this->rs_metadata = other.rs_metadata;
+	this->count = other.count;
 }
 
 std::tuple<bool, LoginServiceDBAccess::LoginResultSet::Data> LoginServiceDBAccess::LoginResultSet::next()
