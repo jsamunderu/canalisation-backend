@@ -2,8 +2,7 @@
 #include <iostream>
 #include "mariadb_access.hpp"
 
-MariadbAccess::MariadbAccess(unsigned int port, const std::string& hostname,
-	const std::string& database, const std::string& username, const std::string& password)
+MariadbAccess::MariadbAccess(const MariadbAccess::Config& config)
 {
 	if ((con = mysql_init(NULL)) == NULL) {
 		std::stringstream ss;
@@ -12,7 +11,9 @@ MariadbAccess::MariadbAccess(unsigned int port, const std::string& hostname,
 		throw Exception(DatabaseAccessError::CONNECTION, ss.str());
     	}
 
-	if (mysql_real_connect(con, hostname.c_str(), username.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL) {
+	if (mysql_real_connect(con, config.host.c_str(),
+			config.username.c_str(), config.password.c_str(),
+			config.database.c_str(), config.port, NULL, 0) == NULL) {
 		std::stringstream ss;
 		ss << mysql_error(con);
 
@@ -94,8 +95,8 @@ unsigned long long ExecQuery::execute(MYSQL_BIND parameters[])
 	if (mysql_stmt_execute(stmt->get())) {
 		throw Exception(DatabaseAccessError::STATEMENT, stmt->reportError());
 	}
-	MYSQL_RES *prepare_meta_result = mysql_stmt_result_metadata(stmt->get());
-	auto _ = gsl::finally([prepare_meta_result] { mysql_free_result(prepare_meta_result); });
+	
 	auto rows = mysql_affected_rows(stmt->get_con().get());
+
 	return rows;
 }

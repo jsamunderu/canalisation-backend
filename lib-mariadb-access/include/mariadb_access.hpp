@@ -19,12 +19,17 @@ private:
 
 class MariadbAccess {
 public:
+
+	struct Config {
+		unsigned int port;
+		std::string host;
+		std::string database;
+		std::string username;
+		std::string password;
+	};
+
 	MariadbAccess() : con(nullptr) {}
-	MariadbAccess(unsigned int port,
-		const std::string& hostname,
-		const std::string& database,
-		const std::string& username,
-		const std::string& password);
+	MariadbAccess(const Config&);
 	MYSQL* get() { return con; }
 	~MariadbAccess();
 private:
